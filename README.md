@@ -38,6 +38,29 @@ pip install linkedin-jobs-scraper
 
 You'll need to pass the `li_at` cookie to the scraper. This is typically done by setting it in the Chrome options when initializing the scraper.
 
+### Job Titles to be Scraped
+
+**⚠️ Important: Update the job titles list based on your needs!**
+
+Before running the script, you should modify the `job_titles` list in `linkedin.py` (lines 18-28) to include the job titles you want to scrape. The current list includes the following as an example:
+
+- Digital Marketing Specialist, Business Development Manager
+- Quality Assurance Analyst, Systems Administrator, Database Administrator, Cybersecurity Analyst, DevOps Engineer
+- Mobile App Developer, Cloud Solutions Architect, Technical Support Engineer, SEO Specialist, Social Media Manager
+- Content Marketing Manager, E-commerce Manager, Brand Manager, Public Relations Specialist, Event Coordinator
+- Logistics Manager, Supply Chain Analyst, Operations Analyst, Risk Manager, Compliance Officer, Auditor, Tax Specialist
+- Investment Analyst, Portfolio Manager, Real Estate Agent, Insurance Underwriter, Claims Adjuster, Actuary, Loan Officer, Credit Analyst, Treasury Analyst, Financial Planner
+- Marketing Analyst, Market Research Analyst, Advertising Manager, Media Planner, Copywriter, Video Producer, Animator, Illustrator, Interior Designer, Architect
+- Civil Engineer, Mechanical Engineer, Electrical Engineer, Chemical Engineer, Environmental Engineer, Biomedical Engineer, Industrial Engineer, Aerospace Engineer, Petroleum Engineer, Nuclear Engineer
+- Pharmacist, Nurse Practitioner, Physician Assistant, Medical Laboratory Technician, Radiologic Technologist, Physical Therapist, Occupational Therapist, Speech-Language Pathologist, Dietitian, Respiratory Therapist
+- Teacher, School Counselor, Librarian, Social Worker, Psychologist, Counselor, Therapist, Coach, Trainer, Recruiter
+
+**Total: 70 different job titles**
+
+**To customize:** Open `linkedin.py` and edit the `job_titles` list to include only the roles you're interested in. You can add or remove job titles as needed.
+
+The script will scrape each job title sequentially with a random delay (60-240 seconds) between each title to avoid rate limiting.
+
 ### Usage
 
 Run the scraper:
