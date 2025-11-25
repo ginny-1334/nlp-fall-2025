@@ -28,7 +28,7 @@ try:
 except Exception:
     pass
 
-st.title("🧹 Data Cleaning - Job Postings")
+st.title("Data Cleaning")
 
 # Initialize session state
 if 'raw_jobs_df' not in st.session_state:
@@ -203,7 +203,7 @@ if st.session_state.raw_jobs_df is not None:
     with col1:
         remove_duplicates = st.checkbox("Remove duplicate rows", value=True)
         combine_text = st.checkbox("Combine multiple text columns", value=True)
-        strip_experience = st.checkbox("Strip experience requirements", value=False)
+        strip_exp = st.checkbox("Strip experience requirements", value=False)
 
     with col2:
         clean_text = st.checkbox("Apply text cleaning", value=True)
@@ -240,7 +240,7 @@ if st.session_state.raw_jobs_df is not None:
                 st.info("Added job_id column")
 
             # Strip experience and deduplicate
-            if strip_experience:
+            if strip_exp:
                 if 'job_text_cleaned' in cleaned_df.columns:
                     initial_count = len(cleaned_df)
                     cleaned_df['job_text_cleaned'] = cleaned_df['job_text_cleaned'].apply(strip_experience)
@@ -307,6 +307,24 @@ if st.session_state.cleaned_jobs_df is not None:
                 st.info("Updated combined_data.json - this will be used by other pages")
         else:
             st.error("Workspace path not found")
+
+    # Populate Database with Embeddings
+    st.markdown("### Populate Database with Embeddings")
+    if st.button("🚀 Populate DB with Embeddings (50k batch)", type="primary", help="Compute embeddings for cleaned data and insert into database in batches of 50,000"):
+        if st.session_state.cleaned_jobs_df is None:
+            st.error("❌ No cleaned data available. Please clean data first.")
+        else:
+            with st.spinner("Computing embeddings and populating database... This may take several minutes."):
+                try:
+                    from functions.database import populate_job_embeddings_from_df
+                    
+                    success = populate_job_embeddings_from_df(st.session_state.cleaned_jobs_df)
+                    if success:
+                        st.success("✅ Database populated with embeddings from cleaned data!")
+                    else:
+                        st.error("❌ Failed to populate database. Check logs for details.")
+                except Exception as e:
+                    st.error(f"❌ Error: {str(e)}")
 
 # Footer
 st.markdown("---")

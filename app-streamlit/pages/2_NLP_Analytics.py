@@ -207,6 +207,14 @@ def run_topic_modeling(texts, method='LDA', n_topics=10, n_words=10, save_model=
     if not SKLEARN_AVAILABLE:
         return None
     
+    # Try to import cuML for GPU acceleration
+    try:
+        from cuml.decomposition import LatentDirichletAllocation as cuLDA
+        from cuml.decomposition import TruncatedSVD as cuSVD
+        CUM_AVAILABLE = True
+    except ImportError:
+        CUM_AVAILABLE = False
+    
     # Create models directory if it doesn't exist
     workspace_path = st.session_state.get('workspace_path')
     if workspace_path:
@@ -246,12 +254,22 @@ def run_topic_modeling(texts, method='LDA', n_topics=10, n_words=10, save_model=
         )
         dtm = vectorizer.fit_transform(processed_texts)
         
-        lda = LatentDirichletAllocation(
-            n_components=n_topics,
-            max_iter=100,
-            learning_method="batch",
-            random_state=44,
-        )
+        if CUM_AVAILABLE:
+            st.info("Using GPU-accelerated cuML for LDA")
+            lda = cuLDA(
+                n_components=n_topics,
+                max_iter=100,
+                random_state=44,
+            )
+        else:
+            st.info("Using CPU-based scikit-learn for LDA (multi-core enabled)")
+            lda = LatentDirichletAllocation(
+                n_components=n_topics,
+                max_iter=100,
+                learning_method="batch",
+                random_state=44,
+                n_jobs=-1,  # Use all available CPU cores
+            )
         topics = lda.fit_transform(dtm)
         
         feature_names = vectorizer.get_feature_names_out()
@@ -299,7 +317,12 @@ def run_topic_modeling(texts, method='LDA', n_topics=10, n_words=10, save_model=
         )
         tfidf = vectorizer.fit_transform(processed_texts)
         
-        svd = TruncatedSVD(n_components=min(n_topics, tfidf.shape[1]-1), random_state=42)
+        if CUM_AVAILABLE:
+            st.info("Using GPU-accelerated cuML for LSA")
+            svd = cuSVD(n_components=min(n_topics, tfidf.shape[1]-1), random_state=42)
+        else:
+            st.info("Using CPU-based scikit-learn for LSA")
+            svd = TruncatedSVD(n_components=min(n_topics, tfidf.shape[1]-1), random_state=42)
         topics = svd.fit_transform(tfidf)
         
         feature_names = vectorizer.get_feature_names_out()
@@ -343,10 +366,31 @@ def simple_tokenize(text):
     return str(text).split()
 
 @st.cache_resource
-def train_word2vec_model(job_texts, resume_texts):
+def train_word2vec_model(job_texts, resume_texts, save_model=True):
     """Train Word2Vec model on combined job and resume texts"""
     if not GENSIM_AVAILABLE:
         return None
+    
+    # Create models directory if it doesn't exist
+    workspace_path = st.session_state.get('workspace_path')
+    if workspace_path:
+        models_dir = os.path.join(workspace_path, "models")
+        os.makedirs(models_dir, exist_ok=True)
+    else:
+        models_dir = "models"
+        os.makedirs(models_dir, exist_ok=True)
+    
+    model_filename = "word2vec_model.joblib"
+    model_path = os.path.join(models_dir, model_filename)
+    
+    # Check if model already exists
+    if os.path.exists(model_path) and JOBLIB_AVAILABLE:
+        st.info(f"Loading existing Word2Vec model from {model_path}")
+        try:
+            saved_data = joblib.load(model_path)
+            return saved_data['model']
+        except Exception as e:
+            st.warning(f"Could not load saved model: {e}. Retraining...")
     
     # Combine and tokenize
     training_corpus = [simple_tokenize(text) for text in job_texts + resume_texts if isinstance(text, str)]
@@ -362,6 +406,20 @@ def train_word2vec_model(job_texts, resume_texts):
         epochs=10
     )
     
+    # Save model if requested
+    if save_model and JOBLIB_AVAILABLE:
+        model_data = {
+            'model': model,
+            'trained_at': datetime.now().isoformat(),
+            'vector_size': 300,
+            'window': 5,
+            'min_count': 10,
+            'sg': 1,
+            'epochs': 10
+        }
+        joblib.dump(model_data, model_path)
+        st.success(f"✅ Word2Vec model saved to {model_path}")
+    
     return model
 
 @st.cache_resource
@@ -370,8 +428,18 @@ def load_sbert_model():
     if not SENTENCE_TRANSFORMERS_AVAILABLE:
         return None
     
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    # Check for available devices in order of preference: CUDA, MPS, CPU
+    if torch.cuda.is_available():
+        device = "cuda"
+        st.info("Using CUDA GPU for SBERT")
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        device = "mps"
+        st.info("Using Apple MPS (Metal) for SBERT")
+    else:
+        device = "cpu"
+        st.info("Using CPU for SBERT")
+    
+    model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
     model = model.to(device)
     return model
 
@@ -515,18 +583,16 @@ def load_job_data():
     """Load job data from workspace"""
     workspace_path = st.session_state.get('workspace_path')
     if workspace_path:
-        # Try loading from combined_data.json first (has job links)
-        json_path = os.path.join(workspace_path, "Data", "combined_data.json")
+        # Try loading from cleaned_data.json first (default for NLP)
+        json_path = os.path.join(workspace_path, "Data", "cleaned_data.json")
         if os.path.exists(json_path):
             with open(json_path, 'r') as f:
                 data = json.load(f)
             df = pd.DataFrame(data)
-            # Check if this data has job links
-            if 'Job Link' in df.columns and df['Job Link'].notna().sum() > 0:
-                return df
+            return df
         
-        # Fallback to cleaned_data.json (more comprehensive but fewer links)
-        json_path = os.path.join(workspace_path, "Data", "cleaned_data.json")
+        # Fallback to combined_data.json (has job links)
+        json_path = os.path.join(workspace_path, "Data", "combined_data.json")
         if os.path.exists(json_path):
             with open(json_path, 'r') as f:
                 data = json.load(f)
@@ -621,7 +687,7 @@ with tab1:
                     else:
                         # Sample some job descriptions
                         # Use appropriate column for job text
-                        text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Description'
+                        text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Job Description'
                         if text_column not in df.columns:
                             st.error(f"Could not find job text column. Available columns: {list(df.columns)}")
                             st.stop()
@@ -686,18 +752,18 @@ with tab2:
     - **Latent Semantic Analysis (LSA)**: SVD-based topic extraction
     """)
     
-    if st.session_state.jobs_df is None:
+    if st.session_state.cleaned_jobs_df is None:
         if st.button("Load Job Data", key="topic_load"):
             with st.spinner("Loading job data..."):
                 df = load_job_data()
                 if df is not None:
-                    st.session_state.jobs_df = df
+                    st.session_state.cleaned_jobs_df = df
                     st.success(f"✅ Loaded {len(df):,} job postings")
                     st.rerun()
                 else:
                     st.error("❌ Could not load data")
     else:
-        df = st.session_state.jobs_df
+        df = st.session_state.cleaned_jobs_df
         st.success(f"✅ Working with {len(df):,} job postings")
         
         # Topic Modeling Settings
@@ -738,7 +804,7 @@ with tab2:
             else:
                 with st.spinner(f"Running {method} topic modeling..."):
                     # Get job texts
-                    text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Description'
+                    text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Job Description'
                     if text_column not in df.columns:
                         st.error(f"Could not find job text column. Available columns: {list(df.columns)}")
                         st.stop()
@@ -819,18 +885,18 @@ with tab3:
     - **Sentence-BERT (SBERT)**: Sentence-level embeddings for job matching
     """)
     
-    if st.session_state.jobs_df is None:
+    if st.session_state.cleaned_jobs_df is None:
         if st.button("Load Job Data", key="embedding_load_jobs"):
             with st.spinner("Loading job data..."):
                 df = load_job_data()
                 if df is not None:
-                    st.session_state.jobs_df = df
+                    st.session_state.cleaned_jobs_df = df
                     st.success(f"✅ Loaded {len(df):,} job postings")
                     st.rerun()
                 else:
                     st.error("❌ Could not load data")
     else:
-        df = st.session_state.jobs_df
+        df = st.session_state.cleaned_jobs_df
         st.success(f"✅ Working with {len(df):,} job postings")
         
         # Load resume data for training
@@ -855,6 +921,14 @@ with tab3:
             help="Choose the embedding method"
         )
         
+        # Model saving option for Word2Vec
+        if embedding_method == "Word2Vec":
+            save_w2v_model = st.checkbox(
+                "Save trained Word2Vec model for future use",
+                value=True,
+                help="Save the trained Word2Vec model to disk for faster loading on subsequent runs"
+            )
+        
         # Load/Train models
         if embedding_method == "Word2Vec":
             if st.session_state.w2v_model is None:
@@ -865,10 +939,10 @@ with tab3:
                         st.error("Please load resume data first")
                     else:
                         with st.spinner("Training Word2Vec model..."):
-                            text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Description'
+                            text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Job Description'
                             job_texts = df[text_column].dropna().tolist()
                             resume_texts = resume_df['cleaned_text'].dropna().tolist()
-                            model = train_word2vec_model(job_texts, resume_texts)
+                            model = train_word2vec_model(job_texts, resume_texts, save_model=save_w2v_model)
                             if model:
                                 st.session_state.w2v_model = model
                                 st.success("✅ Word2Vec model trained!")
@@ -876,11 +950,48 @@ with tab3:
             else:
                 st.success("✅ Word2Vec model ready")
                 
+                # Show saved models
+                st.markdown("#### Saved Word2Vec Models")
+                workspace_path = st.session_state.get('workspace_path')
+                if workspace_path:
+                    models_dir = os.path.join(workspace_path, "models")
+                    if os.path.exists(models_dir):
+                        w2v_files = [f for f in os.listdir(models_dir) if f == 'word2vec_model.joblib']
+                        if w2v_files:
+                            st.markdown("**Available saved Word2Vec model:**")
+                            model_file = w2v_files[0]
+                            col1, col2, col3 = st.columns([3, 1, 1])
+                            with col1:
+                                st.write(f"📁 {model_file}")
+                            with col2:
+                                if st.button("Load", key="load_w2v"):
+                                    model_path = os.path.join(models_dir, model_file)
+                                    try:
+                                        saved_data = joblib.load(model_path)
+                                        st.session_state.w2v_model = saved_data['model']
+                                        st.success(f"✅ Loaded {model_file}")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Failed to load model: {e}")
+                            with col3:
+                                if st.button("Delete", key="delete_w2v"):
+                                    model_path = os.path.join(models_dir, model_file)
+                                    try:
+                                        os.remove(model_path)
+                                        st.success(f"🗑️ Deleted {model_file}")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Failed to delete: {e}")
+                        else:
+                            st.info("No saved Word2Vec model found.")
+                    else:
+                        st.info("Models directory not found.")
+                
                 # Compute embeddings
                 if st.session_state.job_embeddings_w2v is None:
                     if st.button("Compute Job Embeddings", key="compute_w2v_emb"):
                         with st.spinner("Computing job embeddings..."):
-                            text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Description'
+                            text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Job Description'
                             job_texts = df[text_column].dropna().tolist()
                             embeddings = compute_job_embeddings_w2v(job_texts, st.session_state.w2v_model)
                             st.session_state.job_embeddings_w2v = embeddings
@@ -908,7 +1019,7 @@ with tab3:
                 if st.session_state.job_embeddings_sbert is None:
                     if st.button("Compute Job Embeddings", key="compute_sbert_emb"):
                         with st.spinner("Computing job embeddings..."):
-                            text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Description'
+                            text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Job Description'
                             job_texts = df[text_column].dropna().tolist()
                             embeddings = compute_job_embeddings_sbert(job_texts, st.session_state.sbert_model)
                             if embeddings is not None:
@@ -937,7 +1048,7 @@ with tab3:
                 st.error("Please compute SBERT embeddings first")
             else:
                 with st.spinner("Finding similar jobs..."):
-                    text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Description'
+                    text_column = 'job_text_cleaned' if 'job_text_cleaned' in df.columns else 'Job Description'
                     # Keep track of valid indices before dropping NaN
                     valid_mask = df[text_column].notna()
                     job_texts = df[text_column][valid_mask].tolist()
@@ -1123,8 +1234,9 @@ This Streamlit interface implements the NLP techniques from the following Jupyte
 
 **Model Persistence:**
 - Topic models (LDA/LSA) are automatically saved to `workspace/models/` directory
+- Word2Vec models can be saved for future use and reloaded to avoid retraining
 - Saved models can be reloaded for faster analysis without retraining
-- Models are stored in joblib format with vectorizers and metadata
+- Models are stored in joblib format with metadata
 
 **Note**: The implementations above use the cleaned datasets from `Data_Cleaning/cleaned_job_data_dedup.csv` and `Data_Cleaning/cleaned_resume.csv`.
 """)

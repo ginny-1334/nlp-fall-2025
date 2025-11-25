@@ -59,6 +59,7 @@ services:
       - POSTGRES_HOST=nlp-postgres
       - POSTGRES_PORT=5432
       - DATABASE_URL=postgresql://admin:PassW0rd@nlp-postgres:5432/db
+      # - OPENAI_API_KEY=your-openai-api-key-here
     depends_on:
       - nlp-postgres
 

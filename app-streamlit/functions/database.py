@@ -15,6 +15,7 @@ Key Functions:
 """
 import os
 import psycopg2
+import json
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from typing import Optional, Dict, Any
@@ -1011,7 +1012,7 @@ def insert_job_with_embedding(job_id: str, job_text: str, company: str = None, t
         if embedding is None:
             return False
     
-    engine = get_database_engine()
+    engine = create_db_engine()
     if engine is None:
         return False
     
@@ -1042,7 +1043,7 @@ def insert_job_with_embedding(job_id: str, job_text: str, company: str = None, t
 
 def find_similar_jobs(resume_embedding: list, top_k: int = 10) -> list:
     """Find top-k similar jobs using cosine similarity"""
-    engine = get_database_engine()
+    engine = create_db_engine()
     if engine is None:
         return []
     
@@ -1088,3 +1089,455 @@ def batch_insert_jobs(jobs_df: pd.DataFrame):
             success_count += 1
     
     return success_count
+
+def setup_jobs_table():
+    """Create jobs table with vector extension if it doesn't exist"""
+    engine = create_db_engine()
+    if engine is None:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            # Enable pgvector extension
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            
+            # Create jobs table
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS jobs (
+                    id TEXT PRIMARY KEY,
+                    title TEXT,
+                    company TEXT,
+                    text TEXT,
+                    embedding vector(768),  -- SBERT dimension
+                    word2vec_embedding vector(300),  -- Word2Vec dimension
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                
+                -- Create indexes for vector search
+                CREATE INDEX IF NOT EXISTS jobs_embedding_idx ON jobs USING ivfflat (embedding vector_cosine_ops);
+                CREATE INDEX IF NOT EXISTS jobs_word2vec_embedding_idx ON jobs USING ivfflat (word2vec_embedding vector_cosine_ops);
+            """))
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error setting up jobs table: {e}")
+        return False
+
+def insert_job_with_multiple_embeddings(job_id: str, job_text: str, company: str = None, title: str = None, 
+                                       sbert_embedding: list = None, word2vec_embedding: list = None):
+    """Insert job with multiple vector embeddings into database"""
+    engine = create_db_engine()
+    if engine is None:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                INSERT INTO jobs (id, title, company, text, embedding, word2vec_embedding) 
+                VALUES (:id, :title, :company, :text, :embedding, :word2vec_embedding)
+                ON CONFLICT (id) DO UPDATE SET 
+                    title = EXCLUDED.title,
+                    company = EXCLUDED.company,
+                    text = EXCLUDED.text,
+                    embedding = EXCLUDED.embedding,
+                    word2vec_embedding = EXCLUDED.word2vec_embedding
+            """)
+            conn.execute(query, {
+                'id': job_id,
+                'title': title,
+                'company': company,
+                'text': job_text,
+                'embedding': sbert_embedding,
+                'word2vec_embedding': word2vec_embedding
+            })
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error inserting job: {e}")
+        return False
+
+def batch_insert_jobs_with_embeddings(jobs_data: list):
+    """Batch insert multiple jobs with embeddings into database"""
+    engine = create_db_engine()
+    if engine is None:
+        return False
+
+    try:
+        with engine.connect() as conn:
+            for job in jobs_data:
+                # Build dynamic query based on which embeddings are available
+                columns = ['id', 'title', 'company', 'text']
+                values = [job['id'], job['title'], job['company'], job['text']]
+                placeholders = [':id', ':title', ':company', ':text']
+
+                update_parts = [
+                    'title = EXCLUDED.title',
+                    'company = EXCLUDED.company',
+                    'text = EXCLUDED.text'
+                ]
+
+                if job.get('embedding') is not None:
+                    columns.append('embedding')
+                    values.append('[' + ','.join(map(str, job['embedding'])) + ']')
+                    placeholders.append(':embedding')
+                    update_parts.append('embedding = EXCLUDED.embedding')
+
+                if job.get('word2vec_embedding') is not None:
+                    columns.append('word2vec_embedding')
+                    values.append('[' + ','.join(map(str, job['word2vec_embedding'])) + ']')
+                    placeholders.append(':word2vec_embedding')
+                    update_parts.append('word2vec_embedding = EXCLUDED.word2vec_embedding')
+
+                columns_str = ', '.join(columns)
+                placeholders_str = ', '.join(placeholders)
+                update_str = ', '.join(update_parts)
+
+                query = text(f"""
+                    INSERT INTO jobs ({columns_str})
+                    VALUES ({placeholders_str})
+                    ON CONFLICT (id) DO UPDATE SET {update_str}
+                """)
+
+                # Create parameter dict
+                params = dict(zip([col for col in columns], values))
+
+                conn.execute(query, params)
+
+            conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error batch inserting jobs: {e}")
+        return False
+
+def find_similar_jobs_vector(resume_embedding: list, embedding_type: str = 'sbert', top_k: int = 10) -> list:
+    """Find top-k similar jobs using vector similarity search"""
+    engine = create_db_engine()
+    if engine is None:
+        return []
+    
+    try:
+        with engine.connect() as conn:
+            # Choose embedding column based on type
+            embedding_column = 'embedding' if embedding_type == 'sbert' else 'word2vec_embedding'
+            
+            # Convert embedding to string format for pgvector
+            embedding_str = '[' + ','.join(map(str, resume_embedding)) + ']'
+            
+            # Use pgvector for cosine similarity
+            query = text(f"""
+                SELECT id, title, company, text, 
+                       1 - ({embedding_column} <=> :embedding) as similarity
+                FROM jobs
+                WHERE {embedding_column} IS NOT NULL
+                ORDER BY {embedding_column} <=> :embedding
+                LIMIT :top_k
+            """)
+            result = conn.execute(query, {
+                'embedding': embedding_str,
+                'top_k': top_k
+            })
+            
+            jobs = []
+            for row in result:
+                jobs.append({
+                    'id': row[0],
+                    'title': row[1],
+                    'company': row[2],
+                    'text': row[3],
+                    'similarity': float(row[4])
+                })
+            return jobs
+    except Exception as e:
+        print(f"Error finding similar jobs: {e}")
+        return []
+
+def populate_job_embeddings(compute_embeddings: bool = True):
+    """Populate database with job embeddings from combined_data.json
+
+    Args:
+        compute_embeddings: If True, compute and store embeddings. If False, just import job data.
+    """
+    # Setup table
+    if not setup_jobs_table():
+        print("Failed to setup jobs table")
+        return False
+
+    # Load job data - use workspace path from session state or default
+    try:
+        import streamlit as st
+        workspace_path = st.session_state.get('workspace_path')
+    except:
+        workspace_path = None
+
+    if not workspace_path:
+        # Fallback: assume workspace is at project root
+        workspace_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "workspace")
+
+    json_path = os.path.join(workspace_path, "Data", "combined_data.json")
+
+    if not os.path.exists(json_path):
+        print(f"Job data not found at {json_path}")
+        return False
+
+    with open(json_path, 'r') as f:
+        job_data = json.load(f)
+    jobs_df = pd.DataFrame(job_data)
+
+    # Filter valid jobs
+    valid_jobs = jobs_df[jobs_df['Description'].notna() & (jobs_df['Description'] != '')].copy()
+    job_texts = valid_jobs['Description'].tolist()
+
+    print(f"Processing {len(valid_jobs)} jobs...")
+
+    # Initialize embeddings
+    sbert_embeddings = None
+    w2v_embeddings = None
+
+    if compute_embeddings:
+        try:
+            # Import here to avoid circular imports
+            from functions.nlp_models import (
+                load_sbert_model, compute_job_embeddings_sbert,
+                load_trained_word2vec_model, compute_job_embeddings_w2v,
+                simple_tokenize
+            )
+        except ImportError:
+            print("Could not import NLP models - falling back to data-only import")
+            compute_embeddings = False
+
+    if compute_embeddings:
+        # Compute SBERT embeddings in batches for better memory management
+        print("Computing SBERT embeddings... (this may take 30-60 minutes for 30k jobs)")
+        sbert_model = load_sbert_model()
+        if sbert_model:
+            # Process in smaller batches to avoid memory issues
+            batch_size = 1000
+            sbert_embeddings = []
+            for i in range(0, len(job_texts), batch_size):
+                batch_texts = job_texts[i:i + batch_size]
+                batch_embeddings = compute_job_embeddings_sbert(batch_texts, sbert_model)
+                sbert_embeddings.extend(batch_embeddings)
+                print(f"Processed SBERT batch {i//batch_size + 1}/{(len(job_texts) + batch_size - 1)//batch_size}")
+            print(f"SBERT embeddings computed for {len(job_texts)} jobs")
+
+        # Compute Word2Vec embeddings
+        print("Computing Word2Vec embeddings... (this should be faster)")
+        w2v_model = load_trained_word2vec_model()
+        if w2v_model:
+            w2v_embeddings = compute_job_embeddings_w2v(job_texts, w2v_model)
+            print(f"Word2Vec embeddings computed for {len(job_texts)} jobs")
+    else:
+        print("Skipping embedding computation - importing job data only")
+
+    # Prepare batch data
+    batch_data = []
+    for idx, (_, row) in enumerate(valid_jobs.iterrows()):
+        job_id = str(row.get('id', idx))
+        job_text = row.get('Description', '')
+        company = row.get('Company', None)
+        title = row.get('Job Title', None)
+
+        sbert_emb = sbert_embeddings[idx].tolist() if sbert_embeddings is not None and idx < len(sbert_embeddings) else None
+        w2v_emb = w2v_embeddings[idx].tolist() if w2v_embeddings is not None and idx < len(w2v_embeddings) else None
+
+        batch_data.append({
+            'id': job_id,
+            'title': title,
+            'company': company,
+            'text': job_text,
+            'embedding': sbert_emb,
+            'word2vec_embedding': w2v_emb
+        })
+
+    # Batch insert in chunks of 10,000 for better progress tracking
+    chunk_size = 10000
+    success_count = 0
+    total_jobs = len(batch_data)
+
+    for i in range(0, total_jobs, chunk_size):
+        chunk = batch_data[i:i + chunk_size]
+        if batch_insert_jobs_with_embeddings(chunk):
+            success_count += len(chunk)
+            progress = (success_count / total_jobs) * 100
+            print(f"Inserted {success_count}/{total_jobs} jobs ({progress:.1f}%)...")
+        else:
+            print(f"Failed to insert chunk starting at {i}")
+            return False
+
+    print(f"Successfully inserted {success_count}/{total_jobs} jobs")
+    if compute_embeddings:
+        print("Embeddings computed and stored for vector search")
+    else:
+        print("Job data imported - embeddings can be computed later for faster searches")
+    return success_count > 0
+
+
+def update_job_embeddings_for_missing():
+    """Update embeddings for jobs that don't have them yet"""
+    try:
+        from functions.nlp_models import (
+            load_sbert_model, compute_job_embeddings_sbert,
+            load_trained_word2vec_model, compute_job_embeddings_w2v
+        )
+    except ImportError:
+        print("Could not import NLP models")
+        return False
+
+    engine = create_db_engine()
+    if engine is None:
+        return False
+
+    try:
+        with engine.connect() as conn:
+            # Get jobs without embeddings
+            result = conn.execute(text("""
+                SELECT id, text FROM jobs
+                WHERE embedding IS NULL OR word2vec_embedding IS NULL
+                LIMIT 10000
+            """))
+            jobs_without_embeddings = result.fetchall()
+
+            if not jobs_without_embeddings:
+                print("All jobs already have embeddings")
+                return True
+
+            print(f"Found {len(jobs_without_embeddings)} jobs without embeddings")
+
+            job_ids = [row[0] for row in jobs_without_embeddings]
+            job_texts = [row[1] for row in jobs_without_embeddings]
+
+            # Compute SBERT embeddings
+            sbert_embeddings = None
+            sbert_model = load_sbert_model()
+            if sbert_model:
+                print("Computing SBERT embeddings for missing jobs...")
+                sbert_embeddings = compute_job_embeddings_sbert(job_texts, sbert_model)
+
+            # Compute Word2Vec embeddings
+            w2v_embeddings = None
+            w2v_model = load_trained_word2vec_model()
+            if w2v_model:
+                print("Computing Word2Vec embeddings for missing jobs...")
+                w2v_embeddings = compute_job_embeddings_w2v(job_texts, w2v_model)
+
+            # Update jobs in batches
+            batch_size = 1000
+            success_count = 0
+
+            for i in range(0, len(job_ids), batch_size):
+                batch_ids = job_ids[i:i + batch_size]
+                batch_sbert = sbert_embeddings[i:i + batch_size] if sbert_embeddings else None
+                batch_w2v = w2v_embeddings[i:i + batch_size] if w2v_embeddings else None
+
+                # Prepare update data
+                for j, job_id in enumerate(batch_ids):
+                    update_data = {}
+                    if batch_sbert is not None:
+                        update_data['embedding'] = '[' + ','.join(map(str, batch_sbert[j])) + ']'
+                    if batch_w2v is not None:
+                        update_data['word2vec_embedding'] = '[' + ','.join(map(str, batch_w2v[j])) + ']'
+
+                    if update_data:
+                        # Build dynamic update query
+                        set_parts = []
+                        params = {'job_id': job_id}
+
+                        if 'embedding' in update_data:
+                            set_parts.append('embedding = :embedding')
+                            params['embedding'] = update_data['embedding']
+                        if 'word2vec_embedding' in update_data:
+                            set_parts.append('word2vec_embedding = :word2vec_embedding')
+                            params['word2vec_embedding'] = update_data['word2vec_embedding']
+
+                        set_clause = ', '.join(set_parts)
+                        query = text(f"UPDATE jobs SET {set_clause} WHERE id = :job_id")
+
+                        try:
+                            conn.execute(query, params)
+                            success_count += 1
+                        except Exception as e:
+                            print(f"Error updating job {job_id}: {e}")
+
+                print(f"Updated batch {i//batch_size + 1}, total updated: {success_count}/{len(job_ids)}")
+
+            conn.commit()
+            print(f"Successfully updated embeddings for {success_count} jobs")
+            return True
+
+    except Exception as e:
+        print(f"Error updating job embeddings: {e}")
+        return False
+
+def populate_job_embeddings_from_df(jobs_df: pd.DataFrame):
+    """Populate database with job embeddings from a DataFrame"""
+    try:
+        # Import here to avoid circular imports
+        from functions.nlp_models import (
+            load_sbert_model, compute_job_embeddings_sbert,
+            load_trained_word2vec_model, compute_job_embeddings_w2v,
+            simple_tokenize
+        )
+    except ImportError:
+        print("Could not import NLP models")
+        return False
+    
+    # Setup table
+    if not setup_jobs_table():
+        print("Failed to setup jobs table")
+        return False
+    
+    # Filter valid jobs - use job_text_cleaned if available, else Description
+    text_col = 'job_text_cleaned' if 'job_text_cleaned' in jobs_df.columns else 'Description'
+    valid_jobs = jobs_df[jobs_df[text_col].notna() & (jobs_df[text_col] != '')].copy()
+    job_texts = valid_jobs[text_col].tolist()
+    
+    print(f"Processing {len(valid_jobs)} jobs from DataFrame...")
+    
+    # Compute SBERT embeddings
+    print("Computing SBERT embeddings...")
+    sbert_model = load_sbert_model()
+    sbert_embeddings = None
+    if sbert_model:
+        sbert_embeddings = compute_job_embeddings_sbert(job_texts, sbert_model)
+    
+    # Compute Word2Vec embeddings
+    print("Computing Word2Vec embeddings...")
+    w2v_model = load_trained_word2vec_model()
+    w2v_embeddings = None
+    if w2v_model:
+        w2v_embeddings = compute_job_embeddings_w2v(job_texts, w2v_model)
+    
+    # Prepare batch data
+    batch_data = []
+    for idx, (_, row) in enumerate(valid_jobs.iterrows()):
+        job_id = str(row.get('job_id', row.get('id', idx)))
+        job_text = row.get(text_col, '')
+        company = row.get('Company', None)
+        title = row.get('Job Title', None)
+        
+        sbert_emb = sbert_embeddings[idx].tolist() if sbert_embeddings is not None else None
+        w2v_emb = w2v_embeddings[idx].tolist() if w2v_embeddings is not None else None
+        
+        batch_data.append({
+            'id': job_id,
+            'title': title,
+            'company': company,
+            'text': job_text,
+            'embedding': sbert_emb,
+            'word2vec_embedding': w2v_emb
+        })
+    
+    # Batch insert in chunks of 50,000
+    chunk_size = 50000
+    success_count = 0
+    for i in range(0, len(batch_data), chunk_size):
+        chunk = batch_data[i:i + chunk_size]
+        if batch_insert_jobs_with_embeddings(chunk):
+            success_count += len(chunk)
+            print(f"Inserted {success_count}/{len(valid_jobs)} jobs...")
+        else:
+            print(f"Failed to insert chunk starting at {i}")
+            return False
+    
+    print(f"Successfully inserted {success_count}/{len(valid_jobs)} jobs with embeddings")
+    return success_count > 0
