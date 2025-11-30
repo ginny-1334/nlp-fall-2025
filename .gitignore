@@ -18,3 +18,9 @@ workspace/Data_Cleaning/cleaned_job_data_dedup.csv
 workspace/Data_Cleaning/cleaned_job_data_dedup.csv
 workspace/Data_Cleaning/Jobs_data.csv
 /linkedin-jobs-scraper/.github
+workspace/models/topic_model_lsa_100topics.joblib
+workspace/Data_Cleaning/cleaned_job_data.csv
+workspace/Data/Jobs_data.csv
+workspace/Data/cleaned_data_sample.json
+workspace/Data/cleaned_data.json
+backups/jobs_backup_20251129_020529.sql
