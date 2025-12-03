@@ -1493,7 +1493,7 @@ if st.session_state.get("matching_results"):
             # Summary metrics for SBERT
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("SBERT Jobs Found", len(sbert_results))
+                st.metric("Jobs Found", len(sbert_results))
             with col2:
                 avg_final = np.mean([job['final_score'] for job in sbert_results])
                 st.metric("Avg Final Score", f"{avg_final:.3f}")
@@ -1649,7 +1649,7 @@ if st.session_state.get("matching_results"):
             # Summary metrics for Word2Vec
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Word2Vec Jobs Found", len(w2v_results))
+                st.metric("Jobs Found", len(w2v_results))
             with col2:
                 avg_final = np.mean([job['final_score'] for job in w2v_results])
                 st.metric("Avg Final Score", f"{avg_final:.3f}")
