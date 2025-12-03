@@ -42,8 +42,10 @@ main_logo = ""
 sg_logo = ""
 
 # Override with requested hard-coded benchmark numbers
-total_transactions = 861348
-unique_companies = 32
+total_transactions = 1646539
+unique_companies = 8706
+job_titles = 10767
+
 
 # Build metrics list using available values, fallback to defaults when missing
 metrics_data = [
@@ -56,6 +58,12 @@ metrics_data = [
     {
         "label": "Unique Companies",
         "value": (f"{unique_companies:,}" if unique_companies not in (None, 0) else "0"),
+        "delta": "",
+        "context": "",
+    },
+    {
+        "label": "Unique Job Titles",
+        "value": (f"{job_titles:,}" if job_titles not in (None, 0) else "0"),
         "delta": "",
         "context": "",
     },

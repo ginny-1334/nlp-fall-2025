@@ -689,7 +689,7 @@ The system uses Sentence-BERT (SBERT) embeddings for efficient similarity search
 """)
 
 # File upload section
-st.markdown("### 📤 Upload Your Resume")
+st.markdown("### Upload Your Resume")
 
 col1, col2 = st.columns([2, 1])
 
@@ -953,44 +953,6 @@ if st.session_state.get("matching_results"):
             key="download_csv"
         )
 
-# Always show a LinkedIn scraper status/log section
-st.markdown("---")
-st.markdown("### 🐛 LinkedIn Live Scraper Status")
-
-status_text = st.session_state.get("live_linkedin_status")
-error_text = st.session_state.get("live_linkedin_error")
-
-if status_text:
-    st.info(status_text)
-else:
-    st.write("No LinkedIn scraper run yet. Click **Find Matching Jobs** to trigger a live scrape.")
-
-if error_text:
-    with st.expander("View last LinkedIn scraper error"):
-        st.text(error_text)
-
-# Show embedding info if available
-if st.session_state.get("resume_embedding") is not None:
-    st.markdown("---")
-    st.markdown("### 🔍 Technical Details")
-    with st.expander("Embedding & Skills Information"):
-        embedding = st.session_state.resume_embedding
-        st.write(f"**Embedding Model:** Sentence-BERT (all-MiniLM-L6-v2)")
-        st.write(f"**Embedding Dimensions:** {len(embedding)}")
-        st.write(f"**Vector Range:** {min(embedding):.4f} to {max(embedding):.4f}")
-        st.write(f"**Vector Mean:** {np.mean(embedding):.4f}")
-        st.write(f"**Vector Std:** {np.std(embedding):.4f}")
-        
-        if st.session_state.get("matching_results"):
-            results = st.session_state.matching_results
-            if results and 'resume_skills' in results[0]:
-                resume_skills = results[0]['resume_skills']
-                st.write(f"**Resume Skills Extracted:** {len(resume_skills)}")
-                if resume_skills:
-                    st.write("**Sample Skills:**", ", ".join(resume_skills[:5]))
-                    if len(resume_skills) > 5:
-                        st.write(f"... and {len(resume_skills) - 5} more")
-
 # Footer
 st.markdown("---")
 st.markdown("""
@@ -1005,29 +967,6 @@ st.markdown("""
 4. **Combined Scoring**: Final Score = Average(topic, semantic) + (1 - average) × Skill Score
 5. **Results**: View ranked job matches with detailed component scores and skills analysis
 
-### 📋 Requirements
-
-- **Local Models**: `sentence-transformers` for SBERT embeddings
-- **spaCy**: For NER and skills extraction (`en_core_web_sm` model)
-- **Job Data**: `combined_data.json` in `workspace/Data/` directory
-- **Libraries**: `pandas`, `numpy`, `scikit-learn`, `streamlit`
-
-### 🔧 Setup Instructions
-
-1. **Install Required Packages**:
-   ```bash
-   pip install sentence-transformers spacy scikit-learn
-   python -m spacy download en_core_web_sm
-   ```
-
-2. **Prepare Job Data**:
-   - Ensure `combined_data.json` exists in `workspace/Data/`
-   - Job data should have `text`, `title`, `company`, and `id` fields
-
-3. **Run the Application**:
-   - The system will automatically load SBERT model on first use
-   - Embeddings are computed in real-time (consider pre-computing for production)
-
 ### 💡 Tips
 
 - **File Formats**: Both PDF and TXT files are supported
@@ -1035,8 +974,6 @@ st.markdown("""
 - **Combined Scoring**: The final score balances skills expertise, semantic relevance, and topical alignment
 - **Skills Analysis**: Expand the skills section to see detailed resume-job skill matching
 - **Performance**: SBERT embeddings provide high-quality semantic matching without API costs
-
-**Note**: Topic Score uses LSA 100 topics model (`topic_model_lsa_100topics.joblib`) if available in the `models/` directory. If no topic model is found, it falls back to semantic similarity.
 
 For technical support or questions, please check the project documentation.
 """)
