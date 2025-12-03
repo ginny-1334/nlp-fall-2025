@@ -4,6 +4,7 @@ import numpy as np
 import sys
 import os
 import re
+import json
 import tempfile
 import unicodedata
 from typing import Optional, List, Dict, Tuple
@@ -268,27 +269,32 @@ ANALYSIS REQUIREMENTS:
    - Determine: Can they reasonably perform the core job functions?
 
 OUTPUT FORMAT:
-Start with "JOB ANALYSIS:" followed by structured analysis:
-- **Essential Requirements**: [List 3-5 core requirements]
-- **Key Responsibilities**: [Summarize main duties]
-- **Required Skills**: [List required technical skills and technologies]
-- **Preferred Skills**: [List optional/nice-to-have skills, if any]
-- **Experience Level**: [Entry/Mid/Senior level assessment]
-- **Key Insights**: [2-3 actionable insights about what makes a strong candidate]
+You MUST respond with valid JSON only. Use this exact structure:
 
-Then on a new line, write "MATCH EVALUATION:"
-Line 1: "Yes" or "No"
-Line 2: One-sentence explanation of the match decision
+{{
+  "job_analysis": {{
+    "essential_requirements": ["requirement 1", "requirement 2", "requirement 3"],
+    "key_responsibilities": "Summary of main day-to-day duties",
+    "required_skills": ["skill1", "skill2", "skill3"],
+    "preferred_skills": ["optional skill1", "optional skill2"],
+    "experience_level": "Entry/Mid/Senior level",
+    "key_insights": ["insight 1", "insight 2", "insight 3"]
+  }},
+  "match_evaluation": {{
+    "match": true,
+    "reasoning": "One-sentence explanation of the match decision",
+    "recommendations": ["recommendation 1", "recommendation 2", "recommendation 3"],
+    "linkedin_keywords": ["keyword1", "keyword2", "keyword3"]
+  }}
+}}
 
 DECISION RULES:
-- Answer "Yes" if: Candidate has essential qualifications OR strong transferable skills that indicate they can learn/adapt
-- Answer "No" only if: Missing critical core requirements that would prevent basic job performance
+- Set "match": true if: Candidate has essential qualifications OR strong transferable skills that indicate they can learn/adapt
+- Set "match": false only if: Missing critical core requirements that would prevent basic job performance
+- If "match": false, provide "recommendations" (3-5 specific, actionable items) and "linkedin_keywords" (5-10 relevant keywords)
+- If "match": true, "recommendations" and "linkedin_keywords" can be empty arrays
 
-If "No", then continue with:
-Line 3: "RECOMMENDATIONS:" followed by 3-5 specific, actionable recommendations (one per line, each starting with "-")
-Line 4: "LINKEDIN_KEYWORDS:" followed by 5-10 relevant job search keywords (comma-separated)
-
-Be specific and practical. Focus on what candidates need to know to assess their fit and improve their application."""
+IMPORTANT: Return ONLY valid JSON. Do not include any text before or after the JSON."""
     else:
         # Job analysis only (no resume)
         # Clean and truncate job text if too long
@@ -361,8 +367,8 @@ Be specific and practical. Focus on what candidates need to know to assess their
 
 # Helper function to parse combined LLM response (job analysis + match evaluation)
 def parse_combined_llm_response(content: str) -> Dict[str, any]:  # type: ignore
-    """Parse LLM response that contains both job analysis and match evaluation"""
-    lines = [line.strip() for line in content.split('\n') if line.strip()]
+    """Parse LLM response that contains both job analysis and match evaluation.
+    First tries to parse as JSON, falls back to text parsing if JSON fails."""
     
     result = {
         'job_analysis': None,
@@ -372,6 +378,89 @@ def parse_combined_llm_response(content: str) -> Dict[str, any]:  # type: ignore
         'linkedin_keywords': None,
         'error': None
     }
+    
+    # Try to parse as JSON first
+    try:
+        # Clean content - remove markdown code blocks if present
+        cleaned_content = content.strip()
+        if cleaned_content.startswith('```'):
+            # Remove markdown code blocks
+            lines = cleaned_content.split('\n')
+            if lines[0].startswith('```'):
+                lines = lines[1:]
+            if lines[-1].strip() == '```':
+                lines = lines[:-1]
+            cleaned_content = '\n'.join(lines)
+        
+        # Try to find JSON object in the content
+        json_start = cleaned_content.find('{')
+        json_end = cleaned_content.rfind('}') + 1
+        
+        if json_start >= 0 and json_end > json_start:
+            json_str = cleaned_content[json_start:json_end]
+            parsed_json = json.loads(json_str)
+            
+            # Extract job_analysis
+            if 'job_analysis' in parsed_json:
+                job_analysis = parsed_json['job_analysis']
+                # Format job analysis as readable text
+                job_analysis_parts = []
+                if 'essential_requirements' in job_analysis:
+                    reqs = job_analysis['essential_requirements']
+                    if isinstance(reqs, list):
+                        job_analysis_parts.append("**Essential Requirements:**")
+                        for req in reqs:
+                            job_analysis_parts.append(f"- {req}")
+                    else:
+                        job_analysis_parts.append(f"**Essential Requirements:** {reqs}")
+                
+                if 'key_responsibilities' in job_analysis:
+                    job_analysis_parts.append(f"**Key Responsibilities:** {job_analysis['key_responsibilities']}")
+                
+                if 'required_skills' in job_analysis:
+                    skills = job_analysis['required_skills']
+                    if isinstance(skills, list):
+                        job_analysis_parts.append(f"**Required Skills:** {', '.join(skills)}")
+                    else:
+                        job_analysis_parts.append(f"**Required Skills:** {skills}")
+                
+                if 'preferred_skills' in job_analysis and job_analysis['preferred_skills']:
+                    pref_skills = job_analysis['preferred_skills']
+                    if isinstance(pref_skills, list):
+                        job_analysis_parts.append(f"**Preferred Skills:** {', '.join(pref_skills)}")
+                    else:
+                        job_analysis_parts.append(f"**Preferred Skills:** {pref_skills}")
+                
+                if 'experience_level' in job_analysis:
+                    job_analysis_parts.append(f"**Experience Level:** {job_analysis['experience_level']}")
+                
+                if 'key_insights' in job_analysis:
+                    insights = job_analysis['key_insights']
+                    if isinstance(insights, list):
+                        job_analysis_parts.append("**Key Insights:**")
+                        for insight in insights:
+                            job_analysis_parts.append(f"- {insight}")
+                    else:
+                        job_analysis_parts.append(f"**Key Insights:** {insights}")
+                
+                result['job_analysis'] = '\n\n'.join(job_analysis_parts)
+            
+            # Extract match_evaluation
+            if 'match_evaluation' in parsed_json:
+                match_eval = parsed_json['match_evaluation']
+                result['match'] = match_eval.get('match', None)
+                result['reasoning'] = match_eval.get('reasoning', None)
+                result['recommendations'] = match_eval.get('recommendations', None)
+                result['linkedin_keywords'] = match_eval.get('linkedin_keywords', None)
+            
+            return result
+            
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        # JSON parsing failed, fall back to text parsing
+        pass
+    
+    # Fallback to text parsing
+    lines = [line.strip() for line in content.split('\n') if line.strip()]
     
     # Find where job analysis ends and match evaluation begins
     job_analysis_lines = []
@@ -395,24 +484,37 @@ def parse_combined_llm_response(content: str) -> Dict[str, any]:  # type: ignore
         match_lines = lines[match_eval_start + 1:]  # Skip "MATCH EVALUATION:" line
         
         if match_lines:
-            first_line = match_lines[0].upper()
-            if first_line.startswith('YES'):
-                result['match'] = True
-            elif first_line.startswith('NO'):
-                result['match'] = False
+            # Handle case where "Yes" or "No" might be on the same line as "MATCH EVALUATION:"
+            first_line = match_lines[0].upper() if match_lines else ""
             
-            # Get reasoning (second line)
-            if len(match_lines) > 1:
-                result['reasoning'] = match_lines[1]
+            # Check if first line contains "Yes" or "No"
+            if 'YES' in first_line:
+                result['match'] = True
+                # Extract reasoning from the same line or next line
+                if ':' in match_lines[0]:
+                    reasoning_part = match_lines[0].split(':', 1)[1].strip()
+                    if reasoning_part and not reasoning_part.upper().startswith('YES'):
+                        result['reasoning'] = reasoning_part
+                elif len(match_lines) > 1:
+                    result['reasoning'] = match_lines[1]
+            elif 'NO' in first_line:
+                result['match'] = False
+                # Extract reasoning
+                if ':' in match_lines[0]:
+                    reasoning_part = match_lines[0].split(':', 1)[1].strip()
+                    if reasoning_part and not reasoning_part.upper().startswith('NO'):
+                        result['reasoning'] = reasoning_part
+                elif len(match_lines) > 1:
+                    result['reasoning'] = match_lines[1]
             
             # Parse recommendations and keywords if No
-            if result['match'] is False and len(match_lines) > 2:
+            if result['match'] is False and len(match_lines) > 1:
                 recommendations = []
                 linkedin_keywords = None
                 in_recommendations = False
                 in_keywords = False
                 
-                for i, line in enumerate(match_lines[2:], start=2):
+                for i, line in enumerate(match_lines[1:], start=1):
                     line_upper = line.upper()
                     
                     if line_upper.startswith('RECOMMENDATIONS:'):
