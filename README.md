@@ -339,12 +339,6 @@ In `linkedin.py` or the Streamlit interface, adjust filters:
    - Interactive dashboards and visualizations
    - Export capabilities for analysis results
 
-## Notes
-
-- The scraper uses random delays (60-240 seconds) between job title searches to avoid rate limiting
-- All scraped data is timestamped: `linkedin_jobs_YYYYMMDD_HHMMSS.csv`
-- Keep your LinkedIn cookie secure and don't commit it to version control
-- Runs in headless mode by default for efficiency
 
 ## Privacy & Ethics
 
