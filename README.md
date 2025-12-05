@@ -259,8 +259,6 @@ Scraped data is saved to `scraps/` directory with timestamped filenames: `linked
 
 **1. Named Entity Recognition (NER)**
 - Extract skills and technologies
-- Identify qualifications and certifications
-- Recognize company names and locations
 - Custom entity types for job-specific information
 
 ![Named Entity Recognition](images/2_NER.png)
@@ -276,8 +274,7 @@ Scraped data is saved to `scraps/` directory with timestamped filenames: `linked
 **3. Word Embeddings**
 - Word2Vec for word-level semantics
 - Sentence-BERT for document similarity
-- Find similar jobs
-- Skill relationship analysis
+
 
 ![Vector Embeddings](images/4_vector_embedding.png)
 
@@ -286,7 +283,6 @@ Scraped data is saved to `scraps/` directory with timestamped filenames: `linked
 - Compute similarity scores using embeddings
 - Rank jobs by compatibility
 - Provide match explanations
-- Support for multiple resume formats
 
 ![Resume Matching](images/7_top_matching.png)
 
@@ -428,17 +424,6 @@ You MUST obtain the `li_at` cookie from your LinkedIn account for the scraper to
 
 **Note:** Keep this cookie value private and secure. Do not share it or commit it to version control. Store it in your `.env` file or pass it as an environment variable.
 
-### Job Titles
-
-The scraper supports 70+ different job titles across various industries including:
-- Technology (Software Engineer, Data Scientist, DevOps Engineer, etc.)
-- Marketing (Digital Marketing Specialist, SEO Specialist, etc.)
-- Finance (Investment Analyst, Financial Planner, etc.)
-- Engineering (Civil Engineer, Mechanical Engineer, etc.)
-- Healthcare (Pharmacist, Nurse Practitioner, etc.)
-- Education (Teacher, School Counselor, etc.)
-
-You can customize the job titles list in `linkedin.py` or use the Streamlit UI (Page 0) to select specific titles.
 
 ### Scraper Behavior
 
