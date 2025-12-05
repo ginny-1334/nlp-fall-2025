@@ -4,9 +4,9 @@
 
 This project is an NLP-powered platform for analyzing LinkedIn job postings using advanced natural language processing techniques including Named Entity Recognition (NER), Topic Modeling, and Word Embeddings.
 
-📄 **[Final Presentation PDF](Final_Presentation_NLP.pdf)** - Comprehensive project presentation covering business background, methodology, results, and evaluation.
+**[Final Presentation PDF](Final_Presentation_NLP.pdf)** - Comprehensive project presentation covering business background, methodology, results, and evaluation.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/release/python-3120/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-2.15+-orange.svg)](https://www.tensorflow.org/)
@@ -20,14 +20,14 @@ This project is an NLP-powered platform for analyzing LinkedIn job postings usin
 [![Topic Modeling](https://img.shields.io/badge/Topic%20Modeling-LDA%2FLSA-9C27B0.svg)](https://en.wikipedia.org/wiki/Topic_model)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 👥 Course Information
+## Course Information
 
 ### Instructor
 **Samar Deen**  
 Email: sd3912@columbia.edu  
 
 
-## 🤝 Team
+## Team
 
 Applied Text and Natural Language Analytics - Fall 2025 Team Members
 - Boni Vasius Rosen @bvr2105-boni
@@ -36,7 +36,7 @@ Applied Text and Natural Language Analytics - Fall 2025 Team Members
 - Kibaek Kim @hyper07
 - Suchakrey (Philip) Nitisanon
 
-## 🚀 Features
+## Features
 
 ### 1. Job Data Collection
 - **LinkedIn Job Scraper**: Automated scraping of job postings from LinkedIn
@@ -58,7 +58,7 @@ Applied Text and Natural Language Analytics - Fall 2025 Team Members
 - **NLP Analytics**: Run NLP models and view results
 - **Real-time Analysis**: Process job descriptions on-demand
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 nlp-fall-2025/
@@ -127,7 +127,7 @@ nlp-fall-2025/
 └── README.md                         # This file
 ```
 
-## 🛠️ Installation
+## Installation
 
 ### Prerequisites
 
@@ -143,7 +143,7 @@ git clone https://github.com/yourusername/nlp-fall-2025.git
 cd nlp-fall-2025
 ```
 
-## 🚀 Usage
+## Usage
 
 ### Running with Docker (Recommended)
 
@@ -213,7 +213,7 @@ jupyter notebook workspace/Word\ Embedding/
 jupyter notebook workspace/Data_Cleaning/
 ```
 
-## 📊 Features Overview
+## Features Overview
 
 ### LinkedIn Job Scraper
 
@@ -323,7 +323,7 @@ In `linkedin.py` or the Streamlit interface, adjust filters:
 - Time posted
 - Job type (full-time/internship)
 
-## 📈 Data Pipeline
+## Data Pipeline
 
 1. **Collection**: LinkedIn scraper → CSV files in `scraps/`
    - Can be run via command line or Streamlit UI (Page 0)
@@ -339,21 +339,21 @@ In `linkedin.py` or the Streamlit interface, adjust filters:
    - Interactive dashboards and visualizations
    - Export capabilities for analysis results
 
-## 📝 Notes
+## Notes
 
 - The scraper uses random delays (60-240 seconds) between job title searches to avoid rate limiting
 - All scraped data is timestamped: `linkedin_jobs_YYYYMMDD_HHMMSS.csv`
 - Keep your LinkedIn cookie secure and don't commit it to version control
 - Runs in headless mode by default for efficiency
 
-## 🔒 Privacy & Ethics
+## Privacy & Ethics
 
 - Only scrapes publicly available job postings
 - Respects LinkedIn's rate limits with delays
 - No personal data collection
 - For educational/research purposes only
 
-## 📚 Resources
+## Resources
 
 ### Project Documentation
 - [Final Presentation PDF](Final_Presentation_NLP.pdf) - Complete project presentation with methodology, results, and evaluation
@@ -367,7 +367,7 @@ In `linkedin.py` or the Streamlit interface, adjust filters:
 - [pgvector (PostgreSQL vector extension)](https://github.com/pgvector/pgvector)
 
 
-## 📄 License
+## License
 
 This project is available for educational and research purposes. If you would like to use this code, data, or any part of this project for commercial purposes or in your own projects, please contact the project maintainers to request permission.
 
@@ -378,7 +378,7 @@ This project is available for educational and research purposes. If you would li
 
 We're happy to discuss usage terms and are generally open to collaboration and sharing, but we'd like to know how the project is being used.
 
-## 📝 Additional Notes
+## Additional Notes
 
 ### LinkedIn Cookie Setup
 
