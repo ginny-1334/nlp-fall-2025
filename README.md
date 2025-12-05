@@ -17,6 +17,8 @@ This project is an NLP-powered platform for analyzing LinkedIn job postings usin
 - **Word Embeddings**: Word2Vec and Sentence-BERT for semantic analysis
 - **Resume Matching**: Match resumes to job descriptions
 
+![NLP Analytics](images/1_NLP.png)
+
 ### 3. Interactive Dashboard
 - **Streamlit Web App**: User-friendly interface for data exploration
 - **EDA Visualizations**: Interactive charts and statistics
@@ -263,11 +265,15 @@ Scraped data is saved to `scraps/` directory with timestamped filenames: `linked
 - Recognize company names and locations
 - Custom entity types for job-specific information
 
+![Named Entity Recognition](images/2_NER.png)
+
 **2. Topic Modeling**
 - LDA (Latent Dirichlet Allocation)
 - LSA (Latent Semantic Analysis)
 - Discover hidden themes in job descriptions
 - Visualize topic distributions
+
+![Topic Modeling](images/3_topic_modeling.png)
 
 **3. Word Embeddings**
 - Word2Vec for word-level semantics
@@ -275,12 +281,18 @@ Scraped data is saved to `scraps/` directory with timestamped filenames: `linked
 - Find similar jobs
 - Skill relationship analysis
 
+![Vector Embeddings](images/4_vector_embedding.png)
+
 **4. Resume Matching**
 - Extract skills from resumes (PDF parsing)
 - Compute similarity scores using embeddings
 - Rank jobs by compatibility
 - Provide match explanations
 - Support for multiple resume formats
+
+![Resume Matching](images/7_top_matching.png)
+
+![Resume Matching](images/8_top_matching2.png)
 
 **5. Synthetic Resume Generation**
 - Generate synthetic resumes for testing
@@ -291,6 +303,10 @@ Scraped data is saved to `scraps/` directory with timestamped filenames: `linked
 - Evaluate resume quality and completeness
 - Score resumes against job requirements
 - Provide improvement suggestions
+
+![Resume Evaluation](images/5_evaluation.png)
+
+![Resume Evaluation](images/6_evaluation2.png)
 
 ## 🔧 Configuration
 

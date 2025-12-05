@@ -63,7 +63,7 @@ services:
       - POSTGRES_HOST=nlp-postgres
       - POSTGRES_PORT=5432
       - DATABASE_URL=postgresql://admin:PassW0rd@nlp-postgres:5432/db
-      - LI_AT_COOKIE=AQEDASc2hq4DFii6AAABmtq8RcwAAAGa_sjJzFYAXJkehDmcTaSB8bocknEPouTKIc_caPEXLo7yQAqE_mJiAHsM6HSe-gfAJ2AOOVHx4I8fwcrqROW-2W6wo8kxh2SF-Pe6XTdzMT2Z9KLAZOxwHrrt
+      - LI_AT_COOKIE={YOUR_LI_AT_COOKIE_HERE}
       # Chrome / Chromedriver paths for linkedin-jobs-scraper (override if image changes)
       - CHROME_BINARY=/usr/bin/chromium
       - CHROMEDRIVER_PATH=/usr/bin/chromedriver

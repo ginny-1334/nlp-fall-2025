@@ -441,6 +441,7 @@ try:
         reset_jobs_table,
         backup_jobs_to_sql,
         restore_jobs_from_latest_sql_backup,
+        execute_query,
     )
     DB_AVAILABLE = True
 except ImportError as e:
@@ -488,6 +489,98 @@ with col_reset:
                 st.success("✅ Jobs table dropped and recreated successfully!")
             else:
                 st.error("❌ Failed to reset jobs table. Check database connection and permissions.")
+
+# Database Sample Data Section
+st.markdown("---")
+st.markdown("### Sample Data from Database")
+
+col_view, col_refresh = st.columns([3, 1])
+with col_view:
+    st.markdown("View sample records from the `jobs` table in the database.")
+with col_refresh:
+    if st.button("🔄 Refresh Data", key="refresh_db_sample"):
+        st.rerun()
+
+try:
+    # Query sample data from database with embedding values as strings
+    query = """
+    SELECT 
+        id,
+        title,
+        company,
+        LEFT(text, 200) as text_preview,
+        CASE 
+            WHEN embedding IS NOT NULL THEN embedding::text
+            ELSE NULL 
+        END as sbert_embedding_str,
+        CASE 
+            WHEN word2vec_embedding IS NOT NULL THEN word2vec_embedding::text
+            ELSE NULL 
+        END as w2v_embedding_str,
+        CASE 
+            WHEN embedding IS NOT NULL THEN 'Yes' 
+            ELSE 'No' 
+        END as has_sbert_embedding,
+        CASE 
+            WHEN word2vec_embedding IS NOT NULL THEN 'Yes' 
+            ELSE 'No' 
+        END as has_w2v_embedding,
+        created_at
+    FROM jobs
+    ORDER BY created_at DESC NULLS LAST
+    LIMIT 10
+    """
+    
+    df_sample = execute_query(query, use_host=False)
+    
+    if df_sample is not None and len(df_sample) > 0:
+        st.success(f"✅ Found {len(df_sample)} sample records (showing latest 10)")
+        
+        # Get total count
+        count_query = "SELECT COUNT(*) as total FROM jobs"
+        count_df = execute_query(count_query, use_host=False)
+        total_count = count_df.iloc[0]['total'] if count_df is not None and len(count_df) > 0 else 0
+        
+        st.info(f"📊 Total jobs in database: **{total_count:,}**")
+        
+        # Create preview columns for embeddings (first 100 chars)
+        df_display = df_sample.copy()
+        if 'sbert_embedding_str' in df_display.columns:
+            df_display['sbert_preview'] = df_display['sbert_embedding_str'].apply(
+                lambda x: (x[:100] + '...') if x and len(str(x)) > 100 else (x if x else 'N/A')
+            )
+        if 'w2v_embedding_str' in df_display.columns:
+            df_display['w2v_preview'] = df_display['w2v_embedding_str'].apply(
+                lambda x: (x[:100] + '...') if x and len(str(x)) > 100 else (x if x else 'N/A')
+            )
+        
+        # Display the sample data
+        display_cols = ['id', 'title', 'company', 'text_preview', 'has_sbert_embedding', 'has_w2v_embedding', 'created_at']
+        if 'sbert_preview' in df_display.columns:
+            display_cols.insert(display_cols.index('has_sbert_embedding'), 'sbert_preview')
+        if 'w2v_preview' in df_display.columns:
+            display_cols.insert(display_cols.index('has_w2v_embedding'), 'w2v_preview')
+        
+        st.dataframe(
+            df_display[display_cols],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "id": st.column_config.TextColumn("Job ID", width="small"),
+                "title": st.column_config.TextColumn("Title", width="medium"),
+                "company": st.column_config.TextColumn("Company", width="medium"),
+                "text_preview": st.column_config.TextColumn("Text", width="large"),
+                "sbert_preview": st.column_config.TextColumn("SBERT Embedding", width="medium"),
+                # "has_sbert_embedding": st.column_config.TextColumn("Has SBERT", width="small"),
+                "w2v_preview": st.column_config.TextColumn("Word2Vec Embedding", width="medium"),
+                # "has_w2v_embedding": st.column_config.TextColumn("Has W2V", width="small"),
+                "created_at": st.column_config.DatetimeColumn("Created At", width="small"),
+            }
+        )
+        
+except Exception as e:
+    st.error(f"❌ Error querying database: {str(e)}")
+    st.info("💡 Make sure the database is running and the `jobs` table exists. Click 'Setup / Ensure Jobs Table' above if needed.")
 
 # Import Embeddings Section
 st.markdown("---")
