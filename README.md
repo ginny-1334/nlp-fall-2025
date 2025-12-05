@@ -187,11 +187,6 @@ Then run:
 LI_AT_COOKIE="your_cookie_here" python linkedin.py
 ```
 
-Or set it in your `.env` file and run:
-```bash
-python linkedin.py
-```
-
 ### Running NLP Analysis
 
 #### Using the Streamlit App
