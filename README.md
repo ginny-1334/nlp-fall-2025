@@ -40,6 +40,7 @@ Applied Text and Natural Language Analytics - Fall 2025 Team Members
 
 ### 1. Job Data Collection
 - **LinkedIn Job Scraper**: Automated scraping of job postings from LinkedIn
+- **HuggingFace Job Data**: Additional job postings from HuggingFace datasets
 - **70+ Job Titles**: Comprehensive coverage across multiple industries
 - **Structured Data**: Clean CSV format with job details, descriptions, and metadata
 
